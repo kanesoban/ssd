@@ -2,6 +2,13 @@ import pandas as pd
 import numpy as np
 
 
+def create_scales(s_min, s_max, num_scales):
+    scales = []
+    for k in range(1, num_scales+1):
+        scales.append(s_min + (s_max - s_min) / (num_scales - 1) * (k-1))
+    return scales
+
+
 def batch_iou(a, b, epsilon=1e-8):
     # COORDINATES OF THE INTERSECTION BOXES
     x1 = np.array([a[:, 0], b[:, 0]]).max(axis=0)
