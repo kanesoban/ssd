@@ -36,12 +36,12 @@ def batch_iou(a, b, epsilon=1e-8):
     return iou
 
 
-def iou(associations, epsilon=1e-8):
+def iou(associations, name1='prediction', name2='gt', epsilon=1e-8):
     # COORDINATES OF THE INTERSECTION BOXES
-    x1 = associations[['x0_prior', 'x0_gt']].max(axis=1)
-    y1 = associations[['y0_prior', 'y0_gt']].max(axis=1)
-    x2 = associations[['x1_prior', 'y1_gt']].min(axis=1)
-    y2 = associations[['y1_prior', 'y1_gt']].min(axis=1)
+    x1 = associations[['x0_' + name1, 'x0_' + name2]].max(axis=1)
+    y1 = associations[['y0_' + name1, 'y0_' + name2]].max(axis=1)
+    x2 = associations[['x1_' + name1, 'y1_' + name2]].min(axis=1)
+    y2 = associations[['y1_' + name1, 'y1_' + name2]].min(axis=1)
 
     # AREAS OF OVERLAP - Area where the boxes intersect
     width = (x2 - x1)
@@ -54,8 +54,8 @@ def iou(associations, epsilon=1e-8):
     area_overlap = width * height
 
     # COMBINED AREAS
-    area_a = (associations['x1_prior'] - associations['x0_prior']) * (associations['y1_prior'] - associations['y0_prior'])
-    area_b = (associations['x1_gt'] - associations['x0_gt']) * (associations['y1_gt'] - associations['y0_gt'])
+    area_a = (associations['x1_' + name1] - associations['x0_' + name1]) * (associations['y1_' + name1] - associations['y0_' + name1])
+    area_b = (associations['x1_' + name2] - associations['x0_' + name2]) * (associations['y1_' + name2] - associations['y0_' + name2])
     area_combined = area_a + area_b - area_overlap
 
     # RATIO OF AREA OF OVERLAP OVER COMBINED AREA
