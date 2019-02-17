@@ -2,6 +2,47 @@ import pandas as pd
 import numpy as np
 
 
+def get_single_anchor_box(i, j, scale, aspect_ratio, feature_map_width, img_height, img_width):
+    box_width = scale * np.sqrt(aspect_ratio)
+    box_height = scale / np.sqrt(aspect_ratio)
+    center = ((i + 0.5)/feature_map_width, (j + 0.5)/feature_map_width)
+    upper_left = (center[0] - box_width/2, center[1] - box_height/2)
+    lower_right = (center[0] + box_width/2, center[1] + box_height/2)
+    anchor = np.array([center[0], center[1], box_width, box_height])
+    x = np.array([upper_left[0], upper_left[0], lower_right[0], lower_right[0], upper_left[0]]) * img_height
+    y = np.array([upper_left[1], lower_right[1], lower_right[1], upper_left[1], upper_left[1]]) * img_width
+    return anchor, x, y
+
+
+'''
+def create_anchor_boxes(aspect_ratios, scales, img_size):
+    anchors = []
+    for scale in scales:
+        feature_map_width = int(1.0 / scale)
+        for i in range(feature_map_width):
+            for j in range(feature_map_width):
+                for aspect_ratio in aspect_ratios:
+                    anchor, x, y = get_single_anchor_box(i, j, scale, aspect_ratio, feature_map_width, img_size, img_size)
+                    anchors.append(anchor)
+                #TODO: +1 aspect ratio
+    return np.array(anchors)
+'''
+
+
+def create_anchor_boxes(output_shapes, aspect_ratios, scales, img_size):
+    assert(len(output_shapes) == len(scales))
+    anchors = []
+    for scale_index, scale in enumerate(scales):
+        _, feature_map_width, _, priors_per_cell, features_per_box = output_shapes[scale_index]
+        for i in range(feature_map_width):
+            for j in range(feature_map_width):
+                for aspect_ratio in aspect_ratios:
+                    anchor, x, y = get_single_anchor_box(i, j, scale, aspect_ratio, feature_map_width, img_size, img_size)
+                    anchors.append(anchor)
+                #TODO: +1 aspect ratio
+    return np.array(anchors)
+
+
 def create_scales(s_min, s_max, num_scales):
     scales = []
     for k in range(1, num_scales+1):
