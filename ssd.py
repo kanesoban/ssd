@@ -1,8 +1,61 @@
 import numpy as np
 import tensorflow as tf
 import keras.layers as layers
+from keras.layers import Layer, Reshape, Lambda
 from keras.models import Model
+from keras.optimizers import SGD
 from keras.applications.vgg16 import VGG16
+
+from utils import create_anchor_boxes, create_scales
+from loss import ssd300_loss
+
+
+def mult(shape):
+    features = 1
+    for d in shape:
+        features = features * int(d)
+    return int(features)
+
+
+class Localization(Layer):
+    def __init__(self, **kwargs):
+        self.n_priors = None
+        super(Localization, self).__init__(name='localization', **kwargs)
+
+    def build(self, input_shape=None):
+        super(Localization, self).build(input_shape)
+
+    def call(self, inputs, **kwargs):
+        outs = []
+        for inp in inputs:
+            outs.append(tf.reshape(inp[:, :, :, :, -4:], (-1, mult(inp.shape[1:-1]), 4)))
+        output = tf.concat(outs, axis=1)
+        self.n_priors = int(output.shape[1])
+        return output
+
+    def compute_output_shape(self, input_shape):
+        return None, self.n_priors, 4
+
+
+class Confidence(Layer):
+    def __init__(self, n_classes, **kwargs):
+        self.n_classes = n_classes
+        self.n_priors = None
+        super(Confidence, self).__init__(name='confidence', **kwargs)
+
+    def build(self, input_shape=None):
+        super(Confidence, self).build(input_shape)
+
+    def call(self, inputs, **kwargs):
+        outs = []
+        for inp in inputs:
+            outs.append(tf.reshape(inp[:, :, :, :, :self.n_classes], (-1, mult(inp.shape[1:-1]), self.n_classes)))
+        output = tf.concat(outs, axis=1)
+        self.n_priors = int(output.shape[1])
+        return output
+
+    def compute_output_shape(self, input_shape):
+        return None, self.n_priors, self.n_classes
 
 
 class SSD300:
@@ -16,13 +69,22 @@ class SSD300:
     def compute_output_shape(self, num_priors, output_tensor):
         features = SSD300.mult(output_tensor.shape[1:])
         feature_map_width = int(np.sqrt(features / (num_priors * (self.classes + 4))))
-        new_shape = (-1, feature_map_width, feature_map_width, num_priors, 4 + self.classes)
-        assert(SSD300.mult(new_shape[1:]) == features)
+        new_shape = (feature_map_width, feature_map_width, num_priors, 4 + self.classes)
+        assert(SSD300.mult(new_shape) == features)
         return new_shape
 
+    @property
+    def output_shapes(self):
+        shapes = []
+        for output_tensor in self.outputs:
+            shapes.append(output_tensor.shape)
+        return shapes
+
     def add_ssd300_layers(self, vgg_output_tensor):
-        outputs = []
         with tf.variable_scope('ssd_300'):
+            anchor_shapes = []
+            scale1, scale2, scale3, scale4, scale5, scale6 = create_scales(self.min_scale, self.max_scale, 6)
+
             # Classifier 1
             #priors_per_cell = 4
             priors_per_cell = 5
@@ -31,9 +93,10 @@ class SSD300:
                                            padding='same',
                                            name='output1')(vgg_output_tensor)
 
-            self.output_shapes.append(self.compute_output_shape(priors_per_cell, output1_tensor))
+            anchor_shapes.append(self.compute_output_shape(priors_per_cell, output1_tensor))
+            anchors = create_anchor_boxes(anchor_shapes[-1], self.aspect_ratios, scale1, self.img_size)
 
-            outputs.append(output1_tensor)
+            self.outputs.append(Lambda(lambda l: l + anchors)(Reshape(anchor_shapes[-1])(output1_tensor)))
 
             # Convolutional block 1
             block_tensor = layers.Conv2D(1024, (3, 3),
@@ -54,9 +117,11 @@ class SSD300:
                                            padding='same',
                                            name='output2')(block_tensor)
 
-            self.output_shapes.append(self.compute_output_shape(priors_per_cell, output2_tensor))
+            anchor_shapes.append(self.compute_output_shape(priors_per_cell, output1_tensor))
+            anchors = create_anchor_boxes(anchor_shapes[-1], self.aspect_ratios, scale2, self.img_size)
 
-            outputs.append(output2_tensor)
+
+            self.outputs.append(Reshape(anchor_shapes[-1])(output2_tensor))
 
             # Convolutional block 2
             block_tensor = layers.Conv2D(256, (1, 1),
@@ -77,9 +142,10 @@ class SSD300:
                                            padding='same',
                                            name='output3')(block_tensor)
 
-            self.output_shapes.append(self.compute_output_shape(priors_per_cell, output3_tensor))
+            anchor_shapes.append(self.compute_output_shape(priors_per_cell, output1_tensor))
+            anchors = create_anchor_boxes(anchor_shapes[-1], self.aspect_ratios, scale3, self.img_size)
 
-            outputs.append(output3_tensor)
+            self.outputs.append(Reshape(anchor_shapes[-1])(output3_tensor))
 
             # Convolutional block 3
             block_tensor = layers.Conv2D(128, (1, 1),
@@ -100,9 +166,10 @@ class SSD300:
                                            padding='same',
                                            name='output4')(block_tensor)
 
-            self.output_shapes.append(self.compute_output_shape(priors_per_cell, output4_tensor))
+            anchor_shapes.append(self.compute_output_shape(priors_per_cell, output1_tensor))
+            anchors = create_anchor_boxes(anchor_shapes[-1], self.aspect_ratios, scale4, self.img_size)
 
-            outputs.append(output4_tensor)
+            self.outputs.append(Reshape(anchor_shapes[-1])(output4_tensor))
 
             # Convolutional block 4
             block_tensor = layers.Conv2D(128, (1, 1),
@@ -123,9 +190,10 @@ class SSD300:
                                            padding='same',
                                            name='output5')(block_tensor)
 
-            self.output_shapes.append(self.compute_output_shape(priors_per_cell, output5_tensor))
+            anchor_shapes.append(self.compute_output_shape(priors_per_cell, output1_tensor))
+            anchors = create_anchor_boxes(anchor_shapes[-1], self.aspect_ratios, scale5, self.img_size)
 
-            outputs.append(output5_tensor)
+            self.outputs.append(Reshape(anchor_shapes[-1])(output5_tensor))
 
             # Convolutional block 5
             block_tensor = layers.Conv2D(128, (1, 1),
@@ -146,18 +214,25 @@ class SSD300:
                                            padding='same',
                                            name='output6')(block_tensor)
 
-            self.output_shapes.append(self.compute_output_shape(priors_per_cell, output6_tensor))
+            anchor_shapes.append(self.compute_output_shape(priors_per_cell, output1_tensor))
+            anchors = create_anchor_boxes(anchor_shapes[-1], self.aspect_ratios, scale6, self.img_size)
 
-            outputs.append(output6_tensor)
+            self.outputs.append(Reshape(anchor_shapes)(output6_tensor))
 
-            return outputs
+    def build_layers(self, vgg_output_tensor):
+        self.add_ssd300_layers(vgg_output_tensor)
+        return Confidence(self.classes)(self.outputs), Localization()(self.outputs)
 
-    def __init__(self, img_size=300, channels=3, classes=21, box_corners=4, freeze_base=True):
+    def __init__(self, img_size=300, channels=3, classes=21, box_corners=4, freeze_base=True, learning_rate=0.001):
         self.img_size = img_size
         self.channels = channels
         self.classes = classes
         self.box_corners = box_corners
-        self.output_shapes = []
+        self.aspect_ratios = [1.0, 2.0, 3.0, 1.0 / 2, 1.0 / 3]
+        self.min_scale = 0.2
+        self.max_scale = 0.9
+        self.outputs = []
+        self.anchors = None
 
         vgg16_model = VGG16(include_top=False, input_shape=(self.img_size, self.img_size, self.channels))
 
@@ -168,6 +243,18 @@ class SSD300:
 
         vgg_output_tensor = vgg16_model.outputs[0]
 
-        outputs = self.add_ssd300_layers(vgg_output_tensor)
+        confidence, localization = self.build_layers(vgg_output_tensor)
 
-        self.model = Model(input=vgg16_model.input, output=outputs)
+        self.model = Model(input=vgg16_model.input, output=[confidence, localization])
+
+        losses, loss_weights = ssd300_loss()
+        self.model.compile(optimizer=SGD(lr=learning_rate), loss=losses, loss_weights=loss_weights)
+
+    def fit(self, x, y, **kwargs):
+        self.model.fit(x, y, **kwargs)
+
+    def evaluate(self, x, y, **kwargs):
+        return self.model.evaluate(x, y, **kwargs)
+
+    def predict(self, x, **kwargs):
+        return self.model.evaluate(x, **kwargs)

@@ -11,7 +11,6 @@ from ssd import SSD300
 from utils import iou, create_scales, create_anchor_boxes
 
 
-ASPECT_RATIOS = [1.0, 2.0, 3.0, 1.0/2, 1.0/3]
 MAX_SCALE = 0.9
 MIN_SCALE = 0.2
 NUM_SCALES = 6
@@ -104,13 +103,13 @@ def convert(args):
     gluon_dataset = VOCDetection(root=args.data_root, splits=splits)
     if args.single_data:
         rng = [args.single_data]
+        num_data = 1
     else:
         rng = range(len(gluon_dataset))
+        num_data = len(gluon_dataset)
 
     with h5py.File(args.out_path, 'w') as f:
         group = f.create_group('main')
-
-        num_data = len(gluon_dataset)
 
         output_shapes = get_SSD300_output_shapes()
         anchors = create_anchor_boxes(output_shapes, ASPECT_RATIOS, create_scales(MIN_SCALE, MAX_SCALE, 6), IMG_SIZE)
@@ -125,8 +124,8 @@ def convert(args):
         #class_dataset = group.create_dataset('class', (num_data, num_total_priors, NUM_VOC_CLASSES + 1), dtype='i')
         #ohe_encoder = create_class_encoder()
 
-        for i in tqdm(rng):
-            image, label = gluon_dataset[i]
+        for i, data_index in tqdm(enumerate(rng)):
+            image, label = gluon_dataset[data_index]
             bounding_boxes = label[:, :4]
             class_ids = label[:, 4:5]
             image_dataset[i] = preprocess_image(image)

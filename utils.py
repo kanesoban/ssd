@@ -1,5 +1,5 @@
-import pandas as pd
 import numpy as np
+import tensorflow as tf
 
 
 def get_single_anchor_box(i, j, scale, aspect_ratio, feature_map_width, img_height, img_width):
@@ -29,18 +29,25 @@ def create_anchor_boxes(aspect_ratios, scales, img_size):
 '''
 
 
+def create_anchor_boxes(output_shape, aspect_ratios, scale, img_size):
+    feature_map_width, _, priors_per_cell, features_per_box = output_shape
+    anchors = []
+    for i in range(feature_map_width):
+        for j in range(feature_map_width):
+            for aspect_ratio in aspect_ratios:
+                anchor, x, y = get_single_anchor_box(i, j, scale, aspect_ratio, feature_map_width, img_size, img_size)
+                anchors.append(anchor)
+            #TODO: +1 aspect ratio
+    return np.array(anchors)
+
+'''
 def create_anchor_boxes(output_shapes, aspect_ratios, scales, img_size):
     assert(len(output_shapes) == len(scales))
     anchors = []
     for scale_index, scale in enumerate(scales):
-        _, feature_map_width, _, priors_per_cell, features_per_box = output_shapes[scale_index]
-        for i in range(feature_map_width):
-            for j in range(feature_map_width):
-                for aspect_ratio in aspect_ratios:
-                    anchor, x, y = get_single_anchor_box(i, j, scale, aspect_ratio, feature_map_width, img_size, img_size)
-                    anchors.append(anchor)
-                #TODO: +1 aspect ratio
+        anchors += create_anchor_boxes(output_shapes[scale_index], aspect_ratios, scale, img_size)
     return np.array(anchors)
+'''
 
 
 def create_scales(s_min, s_max, num_scales):
@@ -75,6 +82,10 @@ def batch_iou(a, b, epsilon=1e-8):
     # RATIO OF AREA OF OVERLAP OVER COMBINED AREA
     iou = area_overlap / (area_combined + epsilon)
     return iou
+
+
+def iou_tf(a, b):
+    return tf.py_func(batch_iou, [a, b], tf.float32)
 
 
 def iou(associations, name1='prediction', name2='gt', epsilon=1e-8):
