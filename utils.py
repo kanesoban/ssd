@@ -14,21 +14,6 @@ def get_single_anchor_box(i, j, scale, aspect_ratio, feature_map_width, img_heig
     return anchor, x, y
 
 
-'''
-def create_anchor_boxes(aspect_ratios, scales, img_size):
-    anchors = []
-    for scale in scales:
-        feature_map_width = int(1.0 / scale)
-        for i in range(feature_map_width):
-            for j in range(feature_map_width):
-                for aspect_ratio in aspect_ratios:
-                    anchor, x, y = get_single_anchor_box(i, j, scale, aspect_ratio, feature_map_width, img_size, img_size)
-                    anchors.append(anchor)
-                #TODO: +1 aspect ratio
-    return np.array(anchors)
-'''
-
-
 def create_anchor_boxes(output_shape, aspect_ratios, scale, img_size):
     feature_map_width, _, priors_per_cell, features_per_box = output_shape
     anchors = []
@@ -39,15 +24,6 @@ def create_anchor_boxes(output_shape, aspect_ratios, scale, img_size):
                 anchors.append(anchor)
             #TODO: +1 aspect ratio
     return np.array(anchors)
-
-'''
-def create_anchor_boxes(output_shapes, aspect_ratios, scales, img_size):
-    assert(len(output_shapes) == len(scales))
-    anchors = []
-    for scale_index, scale in enumerate(scales):
-        anchors += create_anchor_boxes(output_shapes[scale_index], aspect_ratios, scale, img_size)
-    return np.array(anchors)
-'''
 
 
 def create_scales(s_min, s_max, num_scales):

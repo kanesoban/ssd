@@ -8,7 +8,7 @@ from sklearn.preprocessing import OneHotEncoder
 from gluoncv.data import VOCDetection
 
 from ssd import SSD300
-from utils import iou, create_scales, create_anchor_boxes
+from utils import iou
 
 
 MAX_SCALE = 0.9
@@ -34,9 +34,9 @@ def create_class_encoder():
     return ohe
 
 
-def get_SSD300_output_shapes():
+def get_anchor_boxes():
     model = SSD300()
-    return model.output_shapes
+    return model.anchors
 
 
 def add_corner_coordinates(df):
@@ -69,7 +69,7 @@ def match_ground_truths_to_priors(bounding_boxes, class_ids, anchors, iou_thresh
     associations['match'] = (associations['iou'] > iou_threshold)
 
     best_priors = associations.iloc[associations.groupby('prediction_id').apply(lambda g: g.iou.idxmax())]
-    return best_priors[['center_x_gt', 'center_y_gt', 'w_gt', 'h_gt', 'iou']], best_priors['class_id']
+    return best_priors[['center_x_gt', 'center_y_gt', 'w_gt', 'h_gt']], best_priors['iou'], best_priors['class_id']
 
 
 def preprocess_image(image):
@@ -111,15 +111,16 @@ def convert(args):
     with h5py.File(args.out_path, 'w') as f:
         group = f.create_group('main')
 
-        output_shapes = get_SSD300_output_shapes()
-        anchors = create_anchor_boxes(output_shapes, ASPECT_RATIOS, create_scales(MIN_SCALE, MAX_SCALE, 6), IMG_SIZE)
+        anchors = np.concatenate(get_anchor_boxes(), axis=0)
+
         num_total_priors = anchors.shape[0]
 
         anchors_dataset = group.create_dataset('anchors', anchors.shape, dtype='f')
         anchors_dataset[:] = anchors
         image_dataset = group.create_dataset('image', (num_data, IMG_SIZE, IMG_SIZE, 3), dtype='f')
         # 5 = 4 for box coordinates + iou
-        bounding_boxes_dataset = group.create_dataset('bounding_box', (num_data, num_total_priors, 5), dtype='f')
+        bounding_boxes_dataset = group.create_dataset('bounding_box', (num_data, num_total_priors, 4), dtype='f')
+        iou_dataset = group.create_dataset('iou', (num_data, num_total_priors, 1))
         class_dataset = group.create_dataset('class', (num_data, num_total_priors, 1), dtype='i')
         #class_dataset = group.create_dataset('class', (num_data, num_total_priors, NUM_VOC_CLASSES + 1), dtype='i')
         #ohe_encoder = create_class_encoder()
@@ -130,9 +131,10 @@ def convert(args):
             class_ids = label[:, 4:5]
             image_dataset[i] = preprocess_image(image)
             bounding_boxes = convert_to_anchor_coordinates(image, bounding_boxes)
-            bounding_boxes, classes = match_ground_truths_to_priors(bounding_boxes, class_ids, anchors)
+            bounding_boxes, ious, classes = match_ground_truths_to_priors(bounding_boxes, class_ids, anchors)
             #class_ids = ohe_encoder.transform(class_ids)
             bounding_boxes_dataset[i] = bounding_boxes.values
+            iou_dataset[i] = ious.values.reshape((-1, 1))
             class_dataset[i] = classes.values.reshape((-1, 1))
 
 
