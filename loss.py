@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.python.ops import math_ops
 from sklearn.preprocessing import OneHotEncoder
 
-from utils import iou_tf, batch_iou
+from utils import batch_iou
 
 
 def smoothL1_loss(predictions, labels, weights=1.0, delta=1.0):
@@ -36,43 +36,37 @@ def get_relative_gt_box(ground_truths, default_boxes):
     return rel_ground_truths
 
 
-def localization_loss(object_indicators, predictions, ground_truths, default_boxes):
-    ''' Calculate ssd localization loss 
-    Args:
-        object_indicators: (number of priors, 1)
-        predictions: (number of priors, 4)
-        ground_truths: ground truth boxes (number of priors, 4)
-        default_boxes: prior boxes (number of priors, 4)
-    Returns:
-        ssd localization loss
-    '''
-    assert(predictions.shape[-1] == 4)
-    assert(ground_truths.shape == default_boxes.shape)
-    rel_ground_truths = get_relative_gt_box(ground_truths, default_boxes)
-    return smoothL1_loss(labels=rel_ground_truths, predictions=predictions, weights=object_indicators)
+def to_iou_coordinates(array):
+    iou_coordinates = np.empty_like(array)
+    iou_coordinates[:, :, :2] = array[:, :, :2] - array[:, :, 2:]/2
+    iou_coordinates[:, :, 2:] = array[:, :, :2] + array[:, :, 2:]/2
+    return iou_coordinates
 
 
 def calculate_array_matches(ground_truths, predictions, iou_threshold=0.5):
-    ious = batch_iou(ground_truths, predictions)
+    ious = batch_iou(to_iou_coordinates(ground_truths), to_iou_coordinates(predictions))
     return np.where(iou_threshold < ious, 1.0, 0.0).astype(np.float32)
 
 
 def calculate_matches(ground_truths, predictions, iou_threshold=0.5):
     object_matches = tf.py_func(calculate_array_matches, [ground_truths, predictions], tf.float32)
-    object_matches.set_shape((ground_truths.shape[0], 1))
+    object_matches.set_shape((ground_truths.shape[0], ground_truths.shape[1], 1))
     return object_matches
 
 
-def localization_loss_keras(ground_truths, predictions):
-    ''' Calculate ssd localization loss
-    Args:
-        predictions: (number of total priors, 4)
-        ground_truths: ground truth boxes (number of total priors, 4)
-    Returns:
-        ssd localization loss
-    '''
-    object_matches = calculate_matches(ground_truths, predictions)
-    return smoothL1_loss(labels=ground_truths, predictions=predictions, weights=object_matches)
+def get_localization_loss(anchors):
+    def localization_loss(ground_truths, predictions):
+        ''' Calculate ssd localization loss
+        Args:
+            predictions: (number of total priors, 4)
+            ground_truths: ground truth boxes (number of total priors, 4)
+        Returns:
+            ssd localization loss
+        '''
+        object_matches = calculate_matches(ground_truths, anchors)
+        return smoothL1_loss(labels=ground_truths, predictions=predictions, weights=object_matches)
+
+    return localization_loss
 
 
 def confidence_loss(labels, logits):
@@ -80,11 +74,11 @@ def confidence_loss(labels, logits):
     return tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=logits)
 
 
-def ssd300_loss(alpha=1.0):
+def ssd300_loss(anchors, alpha=1.0):
     # TODO: take into account the number of positive matches in loss (see paper)
     losses = {
         'confidence': confidence_loss,
-        'localization': localization_loss_keras,
+        'localization': get_localization_loss(anchors),
     }
     loss_weights = {'confidence': 1.0, 'localization': alpha}
     return losses, loss_weights

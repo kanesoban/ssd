@@ -88,8 +88,9 @@ class SSD300:
 
             # Classifier + Localizer 1
             #priors_per_cell = 4
+            '''
             priors_per_cell = 5
-            output1_tensor = layers.Conv2D(self.box_corners * priors_per_cell * (self.classes + 4), (3, 3),
+            output1_tensor = layers.Conv2D(priors_per_cell * (self.classes + self.box_corners), (3, 3),
                                            activation=None,
                                            padding='same',
                                            name='output1')(vgg_output_tensor)
@@ -99,7 +100,7 @@ class SSD300:
 
             num_anchors_in_feature_map = SSD300.mult(anchor_shapes[-1][:-1])
             self.outputs.append(Reshape((num_anchors_in_feature_map, self.classes + 4))(output1_tensor))
-
+            '''
 
             # Convolutional block 1
             block_tensor = layers.Conv2D(1024, (3, 3),
@@ -114,18 +115,19 @@ class SSD300:
 
             # Classifier + Localizer 2
             #priors_per_cell = 6
+            '''
             priors_per_cell = 5
-            output2_tensor = layers.Conv2D(self.box_corners * priors_per_cell * (self.classes + 4), (3, 3),
+            output2_tensor = layers.Conv2D(priors_per_cell * (self.classes + self.box_corners), (3, 3),
                                            activation=None,
                                            padding='same',
                                            name='output2')(block_tensor)
 
-            anchor_shapes.append(self.compute_anchor_shape(priors_per_cell, output1_tensor))
+            anchor_shapes.append(self.compute_anchor_shape(priors_per_cell, output2_tensor))
             self.anchors.append(create_anchor_boxes(anchor_shapes[-1], self.aspect_ratios, scale2, self.img_size))
 
             num_anchors_in_feature_map = SSD300.mult(anchor_shapes[-1][:-1])
             self.outputs.append(Reshape((num_anchors_in_feature_map, self.classes + 4))(output2_tensor))
-
+            '''
 
             # Convolutional block 2
             block_tensor = layers.Conv2D(256, (1, 1),
@@ -140,17 +142,19 @@ class SSD300:
 
             # Classifier + Localizer 3
             #priors_per_cell = 6
+            '''
             priors_per_cell = 5
-            output3_tensor = layers.Conv2D(self.box_corners * priors_per_cell * (self.classes + 4), (3, 3),
+            output3_tensor = layers.Conv2D(priors_per_cell * (self.classes + self.box_corners), (3, 3),
                                            activation=None,
                                            padding='same',
                                            name='output3')(block_tensor)
 
-            anchor_shapes.append(self.compute_anchor_shape(priors_per_cell, output1_tensor))
+            anchor_shapes.append(self.compute_anchor_shape(priors_per_cell, output3_tensor))
             self.anchors.append(create_anchor_boxes(anchor_shapes[-1], self.aspect_ratios, scale3, self.img_size))
 
             num_anchors_in_feature_map = SSD300.mult(anchor_shapes[-1][:-1])
             self.outputs.append(Reshape((num_anchors_in_feature_map, self.classes + 4))(output3_tensor))
+            '''
 
             # Convolutional block 3
             block_tensor = layers.Conv2D(128, (1, 1),
@@ -165,17 +169,19 @@ class SSD300:
 
             # Classifier + Localizer 4
             #priors_per_cell = 6
+            '''
             priors_per_cell = 5
-            output4_tensor = layers.Conv2D(self.box_corners * priors_per_cell * (self.classes + 4), (3, 3),
+            output4_tensor = layers.Conv2D(priors_per_cell * (self.classes + self.box_corners), (3, 3),
                                            activation=None,
                                            padding='same',
                                            name='output4')(block_tensor)
 
-            anchor_shapes.append(self.compute_anchor_shape(priors_per_cell, output1_tensor))
+            anchor_shapes.append(self.compute_anchor_shape(priors_per_cell, output4_tensor))
             self.anchors.append(create_anchor_boxes(anchor_shapes[-1], self.aspect_ratios, scale4, self.img_size))
 
             num_anchors_in_feature_map = SSD300.mult(anchor_shapes[-1][:-1])
             self.outputs.append(Reshape((num_anchors_in_feature_map, self.classes + 4))(output4_tensor))
+            '''
 
             # Convolutional block 4
             block_tensor = layers.Conv2D(128, (1, 1),
@@ -190,17 +196,19 @@ class SSD300:
 
             # Classifier + Localizer 5
             #priors_per_cell = 4
+            '''
             priors_per_cell = 5
-            output5_tensor = layers.Conv2D(self.box_corners * priors_per_cell * (self.classes + 4), (3, 3),
+            output5_tensor = layers.Conv2D(priors_per_cell * (self.classes + self.box_corners), (3, 3),
                                            activation=None,
                                            padding='same',
                                            name='output5')(block_tensor)
 
-            anchor_shapes.append(self.compute_anchor_shape(priors_per_cell, output1_tensor))
+            anchor_shapes.append(self.compute_anchor_shape(priors_per_cell, output5_tensor))
             self.anchors.append(create_anchor_boxes(anchor_shapes[-1], self.aspect_ratios, scale5, self.img_size))
 
             num_anchors_in_feature_map = SSD300.mult(anchor_shapes[-1][:-1])
             self.outputs.append(Reshape((num_anchors_in_feature_map, self.classes + 4))(output5_tensor))
+            '''
 
             # Convolutional block 5
             block_tensor = layers.Conv2D(128, (1, 1),
@@ -215,13 +223,14 @@ class SSD300:
 
             # Classifier + Localizer 6
             #priors_per_cell = 4
-            priors_per_cell = 5
-            output6_tensor = layers.Conv2D(self.box_corners * priors_per_cell * (self.classes + 4), (3, 3),
+            #priors_per_cell = 5
+            priors_per_cell = 1
+            output6_tensor = layers.Conv2D(priors_per_cell * (self.classes + self.box_corners), (3, 3),
                                            activation=None,
                                            padding='same',
                                            name='output6')(block_tensor)
 
-            anchor_shapes.append(self.compute_anchor_shape(priors_per_cell, output1_tensor))
+            anchor_shapes.append(self.compute_anchor_shape(priors_per_cell, output6_tensor))
             self.anchors.append(create_anchor_boxes(anchor_shapes[-1], self.aspect_ratios, scale6, self.img_size))
 
             num_anchors_in_feature_map = SSD300.mult(anchor_shapes[-1][:-1])
@@ -236,7 +245,8 @@ class SSD300:
         self.channels = channels
         self.classes = classes
         self.box_corners = box_corners
-        self.aspect_ratios = [1.0, 2.0, 3.0, 1.0 / 2, 1.0 / 3]
+        #self.aspect_ratios = [1.0, 2.0, 3.0, 1.0 / 2, 1.0 / 3]
+        self.aspect_ratios = [1.0]
         self.min_scale = 0.2
         self.max_scale = 0.9
         self.outputs = []
@@ -253,10 +263,12 @@ class SSD300:
 
         confidence, localization = self.build_layers(vgg_output_tensor)
 
-        self.model = Model(input=vgg16_model.input, output=[confidence, localization])
+        self.model = Model(input=vgg16_model.input, output=[localization])
+        #self.model = Model(input=vgg16_model.input, output=[confidence, localization])
 
-        losses, loss_weights = ssd300_loss()
-        self.model.compile(optimizer=SGD(lr=learning_rate), loss=losses, loss_weights=loss_weights)
+        losses, loss_weights = ssd300_loss(np.array(self.anchors))
+        #self.model.compile(optimizer=SGD(lr=learning_rate), loss=losses, loss_weights=loss_weights)
+        self.model.compile(optimizer=SGD(lr=learning_rate), loss=losses['localization'])
 
     def fit(self, x, y, **kwargs):
         self.model.fit(x, y, **kwargs)

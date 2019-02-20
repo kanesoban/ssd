@@ -8,7 +8,7 @@ from sklearn.preprocessing import OneHotEncoder
 from gluoncv.data import VOCDetection
 
 from ssd import SSD300
-from utils import iou
+from utils import df_iou
 
 
 MAX_SCALE = 0.9
@@ -65,7 +65,7 @@ def match_ground_truths_to_priors(bounding_boxes, class_ids, anchors, iou_thresh
 
     associations = pd.merge(anchors, ground_truth_boxes, how='outer', suffixes=('_' + pred_type, '_' + gt_type), on='temp')
     associations = associations.drop(columns=['temp'])
-    associations['iou'] = iou(associations)
+    associations['iou'] = df_iou(associations)
     associations['match'] = (associations['iou'] > iou_threshold)
 
     best_priors = associations.iloc[associations.groupby('prediction_id').apply(lambda g: g.iou.idxmax())]
@@ -118,7 +118,6 @@ def convert(args):
         anchors_dataset = group.create_dataset('anchors', anchors.shape, dtype='f')
         anchors_dataset[:] = anchors
         image_dataset = group.create_dataset('image', (num_data, IMG_SIZE, IMG_SIZE, 3), dtype='f')
-        # 5 = 4 for box coordinates + iou
         bounding_boxes_dataset = group.create_dataset('bounding_box', (num_data, num_total_priors, 4), dtype='f')
         iou_dataset = group.create_dataset('iou', (num_data, num_total_priors, 1))
         class_dataset = group.create_dataset('class', (num_data, num_total_priors, 1), dtype='i')

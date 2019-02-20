@@ -33,7 +33,16 @@ def create_scales(s_min, s_max, num_scales):
     return scales
 
 
-def batch_iou(a, b, epsilon=1e-8):
+def batch_iou(a, b):
+    assert(a.shape == b.shape)
+    ious = np.empty((a.shape[0], a.shape[1], 1))
+    for i in range(a.shape[0]):
+        ious[i] = array_iou(a[i], b[i]).reshape((-1, 1))
+    return ious.astype(np.float32)
+
+
+def array_iou(a, b, epsilon=1e-8):
+    assert(a.shape == b.shape)
     # COORDINATES OF THE INTERSECTION BOXES
     x1 = np.array([a[:, 0], b[:, 0]]).max(axis=0)
     y1 = np.array([a[:, 1], b[:, 1]]).max(axis=0)
@@ -61,10 +70,10 @@ def batch_iou(a, b, epsilon=1e-8):
 
 
 def iou_tf(a, b):
-    return tf.py_func(batch_iou, [a, b], tf.float32)
+    return tf.py_func(array_iou, [a, b], tf.float32)
 
 
-def iou(associations, name1='prediction', name2='gt', epsilon=1e-8):
+def df_iou(associations, name1='prediction', name2='gt', epsilon=1e-8):
     # COORDINATES OF THE INTERSECTION BOXES
     x1 = associations[['x0_' + name1, 'x0_' + name2]].max(axis=1)
     y1 = associations[['y0_' + name1, 'y0_' + name2]].max(axis=1)
