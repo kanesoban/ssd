@@ -265,4 +265,4 @@ class SSD300:
         return self.model.evaluate(x, y, **kwargs)
 
     def predict(self, x, **kwargs):
-        return self.model.evaluate(x, **kwargs)
+        return self.model.predict(x, **kwargs)

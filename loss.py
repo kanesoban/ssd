@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.python.ops import math_ops
 from sklearn.preprocessing import OneHotEncoder
 
-from utils import iou_tf
+from utils import iou_tf, batch_iou
 
 
 def smoothL1_loss(predictions, labels, weights=1.0, delta=1.0):
@@ -52,10 +52,15 @@ def localization_loss(object_indicators, predictions, ground_truths, default_box
     return smoothL1_loss(labels=rel_ground_truths, predictions=predictions, weights=object_indicators)
 
 
+def calculate_array_matches(ground_truths, predictions, iou_threshold=0.5):
+    ious = batch_iou(ground_truths, predictions)
+    return np.where(iou_threshold < ious, 1.0, 0.0).astype(np.float32)
+
+
 def calculate_matches(ground_truths, predictions, iou_threshold=0.5):
-    ious = iou_tf(ground_truths, predictions)
-    condition = tf.less(iou_threshold, ious)
-    return tf.where(condition, 1.0, 0.0)
+    object_matches = tf.py_func(calculate_array_matches, [ground_truths, predictions], tf.float32)
+    object_matches.set_shape((ground_truths.shape[0], 1))
+    return object_matches
 
 
 def localization_loss_keras(ground_truths, predictions):
@@ -66,10 +71,7 @@ def localization_loss_keras(ground_truths, predictions):
     Returns:
         ssd localization loss
     '''
-    #assert(predictions.shape[1:] == ground_truths.shape[1:])
     object_matches = calculate_matches(ground_truths, predictions)
-    #assert(object_matches.shape[0] == predictions.shape[0])
-    #assert(object_matches.shape[1] == 1)
     return smoothL1_loss(labels=ground_truths, predictions=predictions, weights=object_matches)
 
 
