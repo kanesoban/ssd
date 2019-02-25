@@ -5,6 +5,7 @@ from keras.layers import Layer, Reshape, Lambda
 from keras.models import Model
 from keras.optimizers import SGD
 from keras.applications.vgg16 import VGG16
+import keras.backend as K
 
 from utils import create_anchor_boxes, create_scales
 from loss import ssd300_loss
@@ -240,7 +241,17 @@ class SSD300:
         self.add_ssd300_layers(vgg_output_tensor)
         return Confidence(self.classes)(self.outputs), Localization(self.anchors)(self.outputs)
 
-    def __init__(self, img_size=300, channels=3, classes=21, box_corners=4, freeze_base=True, learning_rate=0.001):
+    def create_parameter_tensors(self):
+        self.ground_truth_bb = tf.get_variable(name='ground_truth_bb', shape=(self.batch_size, self.num_anchors, 4),
+                                               dtype=tf.float32, trainable=False)
+
+        self.object_matches = tf.get_variable(name='object_matches', shape=(self.batch_size, self.num_anchors),
+                                               dtype=tf.float32, trainable=False)
+
+        K.get_session().run(tf.initialize_variables([self.ground_truth_bb, self.object_matches]))
+
+    def __init__(self, batch_size, img_size=300, channels=3, classes=21, box_corners=4, freeze_base=True, learning_rate=0.001):
+        self.batch_size = batch_size
         self.img_size = img_size
         self.channels = channels
         self.classes = classes
@@ -251,6 +262,9 @@ class SSD300:
         self.max_scale = 0.9
         self.outputs = []
         self.anchors = []
+        self.session = K.get_session()
+        self.ground_truth_bb = None
+        self.object_matches = None
 
         vgg16_model = VGG16(include_top=False, input_shape=(self.img_size, self.img_size, self.channels))
 
@@ -263,18 +277,23 @@ class SSD300:
 
         confidence, localization = self.build_layers(vgg_output_tensor)
 
-        self.model = Model(input=vgg16_model.input, output=[localization])
-        #self.model = Model(input=vgg16_model.input, output=[confidence, localization])
+        self.model = Model(input=vgg16_model.input, output=[confidence, localization])
 
-        losses, loss_weights = ssd300_loss(np.array(self.anchors))
-        #self.model.compile(optimizer=SGD(lr=learning_rate), loss=losses, loss_weights=loss_weights)
-        self.model.compile(optimizer=SGD(lr=learning_rate), loss=losses['localization'])
+        anchors = np.array(self.anchors)
+        self.num_anchors = anchors.shape[1]
+        self.create_parameter_tensors()
 
-    def fit(self, x, y, **kwargs):
-        self.model.fit(x, y, **kwargs)
+        losses, loss_weights = ssd300_loss(self.ground_truth_bb, self.object_matches)
+        self.model.compile(optimizer=SGD(lr=learning_rate), loss=losses, loss_weights=loss_weights)
 
-    def evaluate(self, x, y, **kwargs):
-        return self.model.evaluate(x, y, **kwargs)
+    def fit(self, data, ground_truth_bb, object_matches, class_ids, **kwargs):
+        self.ground_truth_bb = tf.assign(self.ground_truth_bb, ground_truth_bb)
+        self.object_matches = tf.assign(self.object_matches, object_matches.reshape(self.object_matches.shape))
+        self.model.fit(data, [class_ids, ground_truth_bb], **kwargs)
 
-    def predict(self, x, **kwargs):
-        return self.model.predict(x, **kwargs)
+    def evaluate(self, data, ground_truth_bb, **kwargs):
+        self.ground_truth_bb = tf.assign(self.ground_truth_bb, ground_truth_bb)
+        return self.model.evaluate(data, ground_truth_bb, **kwargs)
+
+    def predict(self, data, **kwargs):
+        return self.model.predict(data, **kwargs)

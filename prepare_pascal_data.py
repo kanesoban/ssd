@@ -17,6 +17,7 @@ NUM_SCALES = 6
 IMG_SIZE = 300
 CHANNELS = 3
 NUM_VOC_CLASSES = 20
+IOU_THRESHOLD = 0.5
 
 
 def get_args():
@@ -35,7 +36,7 @@ def create_class_encoder():
 
 
 def get_anchor_boxes():
-    model = SSD300()
+    model = SSD300(1)
     return model.anchors
 
 
@@ -94,6 +95,13 @@ def convert_to_anchor_coordinates(image, bounding_boxes):
     return np.stack([cx, cy, w, h], axis=1)
 
 
+def assign_classes(classes, matches):
+    # Assign an extra class ('background') to any anchor box, where the highest match is not above IoU threshold
+    classes = classes.values.reshape((-1, 1))
+    classes[~matches] = NUM_VOC_CLASSES + 1
+    return classes
+
+
 def convert(args):
     if args.train:
         splits = [(2007, 'trainval'), (2012, 'trainval')]
@@ -119,7 +127,8 @@ def convert(args):
         anchors_dataset[:] = anchors
         image_dataset = group.create_dataset('image', (num_data, IMG_SIZE, IMG_SIZE, 3), dtype='f')
         bounding_boxes_dataset = group.create_dataset('bounding_box', (num_data, num_total_priors, 4), dtype='f')
-        iou_dataset = group.create_dataset('iou', (num_data, num_total_priors, 1))
+        match_dataset = group.create_dataset('match', (num_data, num_total_priors, 1))
+        num_match_dataset = group.create_dataset('num_match', (num_data, 1), dtype='i')
         class_dataset = group.create_dataset('class', (num_data, num_total_priors, 1), dtype='i')
         #class_dataset = group.create_dataset('class', (num_data, num_total_priors, NUM_VOC_CLASSES + 1), dtype='i')
         #ohe_encoder = create_class_encoder()
@@ -133,8 +142,10 @@ def convert(args):
             bounding_boxes, ious, classes = match_ground_truths_to_priors(bounding_boxes, class_ids, anchors)
             #class_ids = ohe_encoder.transform(class_ids)
             bounding_boxes_dataset[i] = bounding_boxes.values
-            iou_dataset[i] = ious.values.reshape((-1, 1))
-            class_dataset[i] = classes.values.reshape((-1, 1))
+            matches = ious.values.reshape((-1, 1)) > IOU_THRESHOLD
+            match_dataset[i] = np.where(matches, 1.0, 0.0)
+            num_match_dataset[i] = np.sum(matches)
+            class_dataset[i] = assign_classes(classes, matches)
 
 
 if __name__ == "__main__":
